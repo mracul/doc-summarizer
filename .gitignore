@@ -1,4 +1,4 @@
 
 # Ignore the docs folder
 docs/
-
+.env
