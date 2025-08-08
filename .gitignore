@@ -2,4 +2,4 @@
 # Ignore the docs folder
 docs/
 .env
-/ragbuilder/docs
+rag_builder/docs/
