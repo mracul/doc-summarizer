@@ -1,0 +1,7 @@
+camel-ai[all]==0.2.59
+python-dotenv
+mistralai
+anthropic
+nest_asyncio
+GitPython
+inquirer
