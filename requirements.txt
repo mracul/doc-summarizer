@@ -1,7 +1,13 @@
-camel-ai[all]==0.2.59
+camel-ai[all]==0.2.50
 python-dotenv
 mistralai
 anthropic
 nest_asyncio
 GitPython
 inquirer
+langchain-community
+PyGithub
+prompt-toolkit
+sentence-transformers
+torch
+rank_bm25

@@ -2,16 +2,11 @@ import argparse
 import uuid
 import inquirer
 from dotenv import load_dotenv
-from camel.societies import Workforce
-from camel.tasks import Task
-from camel.models import ModelFactory
-from camel.types import ModelPlatformType, ModelType
-from qdrant_client import QdrantClient
+import sys
+import asyncio
 
-from rag_builder.toolkits import IngestionToolkit, IndexingToolkit
-from rag_builder.agents import ToolCriticAgent, RetrievalAgent, SynthesisAgent
+from rag_builder.pipeline import RAGPipeline
 from rag_builder.utils import read_rags_config, write_rags_config
-from rag_builder.config import VECTOR_STORAGE_PATH
 
 # Load environment variables from .env file
 load_dotenv()
@@ -63,40 +58,8 @@ def ingest_data(args):
         print(f"Error: RAG index '{rag_name}' not found.")
         return
 
-    print(f"Ingesting data into RAG index '{rag_name}'...")
-    
-    qdrant_client = QdrantClient(path=VECTOR_STORAGE_PATH)
-    
-    ingestion_toolkit = IngestionToolkit()
-    indexing_toolkit = IndexingToolkit(qdrant_client, selected_rag['collection_name'])
-    
-    ingestion_agent = ModelFactory.create(
-        model_platform=ModelPlatformType.OPENAI,
-        model_type=ModelType.GPT_4O_MINI,
-    )
-    
-    workforce = Workforce(
-        "Ingestion and Indexing Workforce",
-        coordinator_agent=ingestion_agent,
-    )
-    
-    workforce.add_single_agent_worker(
-        "Data Ingestion Specialist",
-        worker=ingestion_agent,
-        tools=ingestion_toolkit.get_tools(),
-    )
-    workforce.add_single_agent_worker(
-        "Data Indexing Specialist",
-        worker=ingestion_agent,
-        tools=indexing_toolkit.get_tools(),
-    )
-    
-    task = Task(
-        f"Ingest and index documents from {args.path} into the collection {selected_rag['collection_name']}"
-    )
-    result = workforce.process_task(task)
-    print(result)
-    print("Data ingestion completed.")
+    pipeline = RAGPipeline()
+    pipeline.ingest(args.path, selected_rag['collection_name'])
 
 def ask_question(args):
     """Asks a question to a specified RAG index."""
@@ -117,45 +80,17 @@ def ask_question(args):
         print(f"Error: RAG index '{rag_name}' not found.")
         return
 
-    print(f"Asking question to RAG index '{rag_name}'...")
-
-    tool_critic_model = ModelFactory.create(
-        model_platform=ModelPlatformType.MISTRAL,
-        model_type="open-mistral-7b",
-    )
-    retrieval_model = ModelFactory.create(
-        model_platform=ModelPlatformType.MISTRAL,
-        model_type="open-mistral-7b",
-    )
-    synthesis_model = ModelFactory.create(
-        model_platform=ModelPlatformType.MISTRAL,
-        model_type=ModelType.MISTRAL_LARGE,
-    )
-
-    tool_critic_agent = ToolCriticAgent(model=tool_critic_model)
-    retrieval_agent = RetrievalAgent(model=retrieval_model)
-    synthesis_agent = SynthesisAgent(model=synthesis_model)
-
-    workforce = Workforce(
-        "RAG Query Workforce",
-        coordinator_agent=tool_critic_agent,
-    )
-    workforce.add_single_agent_worker(
-        "Retrieval Specialist",
-        worker=retrieval_agent,
-    )
-    workforce.add_single_agent_worker(
-        "Synthesis Specialist",
-        worker=synthesis_agent,
-    )
-
-    task = Task(f"Answer the following question: {args.query}")
-    result = workforce.process_task(task)
-    
-    print("Answer:")
-    print(result)
+    pipeline = RAGPipeline()
+    pipeline.ask(args.query, selected_rag['collection_name'])
 
 def main():
+    """Main function to parse arguments and call the appropriate command."""
+    if len(sys.argv) == 1:
+        # No arguments provided, run the TUI
+        from rag_builder import tui
+        asyncio.run(tui.main())
+        return
+
     parser = argparse.ArgumentParser(
         description="A CLI tool for managing and querying multiple RAG indexes."
     )

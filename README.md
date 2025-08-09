@@ -8,17 +8,17 @@ The pipeline is designed as a hierarchical, multi-agent system that optimizes fo
 
 ### The Three-Tiered Agent Structure
 
-1.  **The Front Desk (ToolCriticAgent)**:
-    -   **Model**: `open-mistral-7b` (or a similar low-latency model)
-    -   **Objective**: To function as a high-accuracy query router. It analyzes an incoming user query and selects the single most appropriate tool for the initial data retrieval step, saving cost and time.
+1.  **The Analyst (ClarificationAgent)**:
+    -   **Model**: `openai/gpt-oss-20b:free` (via OpenRouter)
+    -   **Objective**: To perform a deep analysis of the user's query. It classifies intent, segments complex questions, extracts key entities, and formulates a refined, context-aware query for the retrieval system. This pre-retrieval step ensures that the search is highly targeted and relevant.
 
-2.  **The Specialist (RetrievalAgent)**:
-    -   **Model**: `open-mistral-7b` (or a similar capable reasoning model)
-    -   **Objective**: To execute a dynamic, multi-step retrieval process. When a query requires deep investigation, this agent performs contextual analysis, query expansion (multi-hop retrieval), and final curation to assemble a comprehensive and highly relevant context package.
+2.  **The Retriever (HybridRetriever)**:
+    -   **Technology**: Qdrant, SentenceTransformers, BM25
+    -   **Objective**: To execute a broad, two-pronged search. It uses the `refined_query_for_embedding` from the Analyst for a semantic vector search and the `search_terms` for a parallel keyword (BM25) search. It fetches a large set of candidate documents and then reranks them using a hybrid score to find the most relevant context.
 
 3.  **The Executive (SynthesisAgent)**:
-    -   **Model**: `mistral-large-latest`
-    -   **Objective**: To synthesize the user query and the context package prepared by the Specialist into a final, high-quality, and grounded answer. It is mandated to cite sources, rely exclusively on the provided context for its primary answer, and adhere to strict formatting rules.
+    -   **Model**: `openai/gpt-oss-20b:free` (via OpenRouter)
+    -   **Objective**: To synthesize the user query and the context package prepared by the Retriever into a final, high-quality, and grounded answer. It is mandated to cite sources, rely exclusively on the provided context for its primary answer, and adhere to strict formatting rules.
 
 ### Data Ingestion and Indexing
 
@@ -27,32 +27,23 @@ Before queries can be answered, documents are processed by a separate `Workforce
 -   **Universal and Recursive Data Loading**: A versatile `load_from_path` tool intelligently handles Git repositories, local directories, and single files to fetch all source materials.
 -   **Indexing Agent**: This agent uses an `IndexingToolkit` to:
     -   **`chunk_document`**: Perform structure-aware chunking using **AST parsing** for code and a hierarchical approach for Markdown. For Jupyter Notebooks, each cell is treated as a chunk.
-    -   **`embed_chunks`**: Convert text chunks into vectors using a local **Ollama** instance running the `mistral` model.
+    -   **`embed_chunks`**: Convert text chunks into vectors using the `all-MiniLM-L6-v2` model from **SentenceTransformers**.
     -   **`deduplicate_and_store`**: Ensure unique content is stored in the **Qdrant** vector database.
 
 ## Features
 
--   **Hierarchical Agent Workflow**: A cost and latency-optimized three-tiered system (Front Desk, Specialist, Executive) ensures that the right level of intelligence is applied at each stage of the query process.
+-   **Advanced Query Analysis**: A dedicated `ClarificationAgent` performs intent classification, entity extraction, and query refinement to ensure a deep understanding of the user's needs before retrieval.
+-   **Hybrid Search**: Combines semantic (vector) search with traditional keyword (BM25) search to improve retrieval accuracy for a wide range of queries.
+-   **Hierarchical Agent Workflow**: A cost and latency-optimized three-tiered system (Analyst, Retriever, Executive) ensures that the right level of intelligence is applied at each stage of the query process.
 -   **Universal and Recursive Data Ingestion**: A single `load_from_path` tool intelligently handles Git repositories, local directories, and individual files.
--   **Local Embeddings**: Uses **Ollama** with the `mistral` model to generate embeddings locally, ensuring data privacy and removing reliance on external APIs.
+-   **Local Embeddings**: Uses **SentenceTransformers** with the `all-MiniLM-L6-v2` model to generate embeddings locally, ensuring data privacy and removing reliance on external APIs.
 -   **Advanced Structure-Aware Chunking**: Employs **AST parsing** for code and hierarchical analysis for Markdown to create context-rich chunks.
--   **Multi-Hop Reasoning for Retrieval**: The Specialist agent performs deep contextual analysis and query expansion to build a comprehensive, noise-free context.
--   **High-Quality Synthesis**: Leverages **Mistral Large** as the Executive agent to provide polished, definitive answers.
+-   **High-Quality Synthesis**: Leverages the `openai/gpt-oss-20b:free` model as the Executive agent to provide polished, definitive answers.
 -   **Efficient Storage**: Uses **Qdrant** for high-performance vector search and **embedding deduplication** to avoid redundant data.
 
 ## Setup and Usage
 
-### 1. Prerequisites
-
-Before running the pipeline, you need to have **Ollama** installed and running.
-
--   **Install Ollama**: Follow the instructions at [https://ollama.com/](https://ollama.com/).
--   **Pull the Mistral Model**: Once Ollama is running, pull the `mistral` model, which will be used for generating embeddings.
-    ```bash
-    ollama pull mistral
-    ```
-
-### 2. Installation
+### 1. Installation
 
 First, clone the repository and install the required dependencies:
 
@@ -62,16 +53,16 @@ cd doc-summarizer
 pip install -r requirements.txt
 ```
 
-### 3. Configuration
+### 2. Configuration
 
-Create a `.env` file in the root of the project and add your API keys. You will need a key for Mistral AI for the final synthesis step.
+Create a `.env` file in the root of the project and add your OpenRouter API key.
 
 ```
-MISTRAL_API_KEY="your-mistral-api-key"
+OPENROUTER_API_KEY="your-openrouter-api-key"
 # Add any other required keys (e.g., for data loaders)
 ```
 
-### 4. Running the Pipeline
+### 3. Running the Pipeline
 
 The pipeline is managed through the main CLI script.
 
@@ -97,7 +88,7 @@ python -m rag_builder.main ingest https://github.com/camel-ai/camel.git --name m
 
 **C. Ask a Question**
 
-Once your data is ingested, you can ask questions. The pipeline will retrieve the relevant context and generate an answer using Mistral Large.
+Once your data is ingested, you can ask questions. The pipeline will retrieve the relevant context and generate an answer.
 
 ```bash
 python -m rag_builder.main ask "What is the Workforce module in CAMEL AI?" --name my-document-index
